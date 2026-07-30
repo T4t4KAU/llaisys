@@ -4,10 +4,15 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace llaisys::models {
+
+#ifdef ENABLE_NVIDIA_API
+class Qwen2NvidiaModel;
+#endif
 
 struct Weight {
     std::vector<uint16_t> data;
@@ -36,6 +41,7 @@ struct Qwen2LayerWeights {
 class Qwen2Model {
 public:
     explicit Qwen2Model(const LlaisysQwen2Config &config);
+    ~Qwen2Model();
 
     bool loadWeight(const std::string &name,
                     const void *data,
@@ -62,6 +68,9 @@ private:
     std::vector<Qwen2LayerWeights> _layers;
     std::vector<LayerCache> _cache;
     bool _ready = false;
+#ifdef ENABLE_NVIDIA_API
+    std::unique_ptr<Qwen2NvidiaModel> _nvidia;
+#endif
 
     std::vector<uint16_t> _hidden;
     std::vector<uint16_t> _norm;

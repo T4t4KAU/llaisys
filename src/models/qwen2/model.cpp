@@ -1,4 +1,7 @@
 #include "model.hpp"
+#ifdef ENABLE_NVIDIA_API
+#include "model_nvidia.cuh"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -169,14 +172,23 @@ void swiglu(std::vector<bf16> &out,
 
 Qwen2Model::Qwen2Model(const LlaisysQwen2Config &config)
     : _config(config), _layers(config.num_hidden_layers), _cache(config.num_hidden_layers) {
-    if (_config.device_type != LLAISYS_DEVICE_CPU) {
+    if (_config.device_type != LLAISYS_DEVICE_CPU
+#ifdef ENABLE_NVIDIA_API
+        && _config.device_type != LLAISYS_DEVICE_NVIDIA
+#endif
+    ) {
         throw std::invalid_argument("Qwen2 CPU model only supports the CPU device in this build");
     }
-    if (_config.hidden_size == 0 || _config.num_attention_heads == 0 ||
-        _config.hidden_size % _config.num_attention_heads != 0 ||
-        _config.num_attention_heads % _config.num_key_value_heads != 0) {
+    if (_config.hidden_size == 0 || _config.num_attention_heads == 0 || _config.hidden_size % _config.num_attention_heads != 0 || _config.num_attention_heads % _config.num_key_value_heads != 0) {
         throw std::invalid_argument("Invalid Qwen2 configuration");
     }
+
+#ifdef ENABLE_NVIDIA_API
+    if (_config.device_type == LLAISYS_DEVICE_NVIDIA) {
+        _nvidia = std::make_unique<Qwen2NvidiaModel>(_config);
+        return;
+    }
+#endif
 
     _hidden.resize(_config.hidden_size);
     _norm.resize(_config.hidden_size);
@@ -190,6 +202,8 @@ Qwen2Model::Qwen2Model(const LlaisysQwen2Config &config)
     _up.resize(_config.intermediate_size);
     _mlp.resize(_config.intermediate_size);
 }
+
+Qwen2Model::~Qwen2Model() = default;
 
 Weight *Qwen2Model::findWeight(const std::string &name) {
     if (name == "model.embed_tokens.weight") {
@@ -223,18 +237,42 @@ Weight *Qwen2Model::findWeight(const std::string &name) {
 
     Qwen2LayerWeights &layer = _layers[layer_index];
     const std::string suffix = name.substr(dot + 1);
-    if (suffix == "input_layernorm.weight") return &layer.input_norm;
-    if (suffix == "post_attention_layernorm.weight") return &layer.post_attention_norm;
-    if (suffix == "self_attn.q_proj.weight") return &layer.q_weight;
-    if (suffix == "self_attn.q_proj.bias") return &layer.q_bias;
-    if (suffix == "self_attn.k_proj.weight") return &layer.k_weight;
-    if (suffix == "self_attn.k_proj.bias") return &layer.k_bias;
-    if (suffix == "self_attn.v_proj.weight") return &layer.v_weight;
-    if (suffix == "self_attn.v_proj.bias") return &layer.v_bias;
-    if (suffix == "self_attn.o_proj.weight") return &layer.o_weight;
-    if (suffix == "mlp.gate_proj.weight") return &layer.gate_weight;
-    if (suffix == "mlp.up_proj.weight") return &layer.up_weight;
-    if (suffix == "mlp.down_proj.weight") return &layer.down_weight;
+    if (suffix == "input_layernorm.weight") {
+        return &layer.input_norm;
+    }
+    if (suffix == "post_attention_layernorm.weight") {
+        return &layer.post_attention_norm;
+    }
+    if (suffix == "self_attn.q_proj.weight") {
+        return &layer.q_weight;
+    }
+    if (suffix == "self_attn.q_proj.bias") {
+        return &layer.q_bias;
+    }
+    if (suffix == "self_attn.k_proj.weight") {
+        return &layer.k_weight;
+    }
+    if (suffix == "self_attn.k_proj.bias") {
+        return &layer.k_bias;
+    }
+    if (suffix == "self_attn.v_proj.weight") {
+        return &layer.v_weight;
+    }
+    if (suffix == "self_attn.v_proj.bias") {
+        return &layer.v_bias;
+    }
+    if (suffix == "self_attn.o_proj.weight") {
+        return &layer.o_weight;
+    }
+    if (suffix == "mlp.gate_proj.weight") {
+        return &layer.gate_weight;
+    }
+    if (suffix == "mlp.up_proj.weight") {
+        return &layer.up_weight;
+    }
+    if (suffix == "mlp.down_proj.weight") {
+        return &layer.down_weight;
+    }
     return nullptr;
 }
 
@@ -246,6 +284,11 @@ bool Qwen2Model::loadWeight(const std::string &name,
     if (_ready || data == nullptr || dtype != LLAISYS_DTYPE_BF16) {
         return false;
     }
+#ifdef ENABLE_NVIDIA_API
+    if (_nvidia) {
+        return _nvidia->loadWeight(name, data, shape, ndim, dtype);
+    }
+#endif
     Weight *weight = findWeight(name);
     if (weight == nullptr) {
         return false;
@@ -261,18 +304,15 @@ bool Qwen2Model::loadWeight(const std::string &name,
 }
 
 bool Qwen2Model::finalize() {
+#ifdef ENABLE_NVIDIA_API
+    if (_nvidia) {
+        _ready = _nvidia->finalize();
+        return _ready;
+    }
+#endif
     bool complete = _embedding.loaded() && _final_norm.loaded() && _lm_head.loaded();
     for (const Qwen2LayerWeights &layer : _layers) {
-        complete = complete &&
-                   layer.input_norm.loaded() &&
-                   layer.post_attention_norm.loaded() &&
-                   layer.q_weight.loaded() && layer.q_bias.loaded() &&
-                   layer.k_weight.loaded() && layer.k_bias.loaded() &&
-                   layer.v_weight.loaded() && layer.v_bias.loaded() &&
-                   layer.o_weight.loaded() &&
-                   layer.gate_weight.loaded() &&
-                   layer.up_weight.loaded() &&
-                   layer.down_weight.loaded();
+        complete = complete && layer.input_norm.loaded() && layer.post_attention_norm.loaded() && layer.q_weight.loaded() && layer.q_bias.loaded() && layer.k_weight.loaded() && layer.k_bias.loaded() && layer.v_weight.loaded() && layer.v_bias.loaded() && layer.o_weight.loaded() && layer.gate_weight.loaded() && layer.up_weight.loaded() && layer.down_weight.loaded();
     }
     _ready = complete;
     return complete;
@@ -320,8 +360,7 @@ int64_t Qwen2Model::forwardToken(int64_t token, size_t position) {
                     const bf16 third_product = floatToBf16(second * cosine);
                     const bf16 fourth_product = floatToBf16(first * sine);
                     vector[i] = floatToBf16(bf16ToFloat(first_product) - bf16ToFloat(second_product));
-                    vector[i + head_size / 2] =
-                        floatToBf16(bf16ToFloat(third_product) + bf16ToFloat(fourth_product));
+                    vector[i + head_size / 2] = floatToBf16(bf16ToFloat(third_product) + bf16ToFloat(fourth_product));
                 }
             }
         };
@@ -340,8 +379,7 @@ int64_t Qwen2Model::forwardToken(int64_t token, size_t position) {
             const bf16 *query = _q.data() + head * head_size;
             float max_score = -std::numeric_limits<float>::infinity();
             for (size_t sequence = 0; sequence < context; ++sequence) {
-                const bf16 *key =
-                    cache.key.data() + sequence * kv_size + kv_head * head_size;
+                const bf16 *key = cache.key.data() + sequence * kv_size + kv_head * head_size;
                 const bf16 dot = floatToBf16(dotBf16(query, key, head_size));
                 const bf16 scaled = floatToBf16(bf16ToFloat(dot) * attention_scale);
                 _scores[sequence] = bf16ToFloat(scaled);
@@ -359,8 +397,7 @@ int64_t Qwen2Model::forwardToken(int64_t token, size_t position) {
             for (size_t dimension = 0; dimension < head_size; ++dimension) {
                 float value = 0.0F;
                 for (size_t sequence = 0; sequence < context; ++sequence) {
-                    const bf16 cached_value =
-                        cache.value[sequence * kv_size + kv_head * head_size + dimension];
+                    const bf16 cached_value = cache.value[sequence * kv_size + kv_head * head_size + dimension];
                     value += _scores[sequence] * bf16ToFloat(cached_value);
                 }
                 attention_head[dimension] = floatToBf16(value);
@@ -386,14 +423,18 @@ size_t Qwen2Model::generate(const int64_t *input_ids,
                             size_t max_new_tokens,
                             int64_t *output_ids,
                             size_t output_capacity) {
-    if (!_ready || input_ids == nullptr || output_ids == nullptr ||
-        input_count == 0 || output_capacity < input_count + max_new_tokens) {
+    if (!_ready || input_ids == nullptr || output_ids == nullptr || input_count == 0 || output_capacity < input_count + max_new_tokens) {
         return 0;
     }
+#ifdef ENABLE_NVIDIA_API
+    if (_nvidia) {
+        return _nvidia->generate(
+            input_ids, input_count, max_new_tokens, output_ids, output_capacity);
+    }
+#endif
     std::copy(input_ids, input_ids + input_count, output_ids);
     const size_t capacity = input_count + max_new_tokens;
-    const size_t kv_size =
-        _config.num_key_value_heads * (_config.hidden_size / _config.num_attention_heads);
+    const size_t kv_size = _config.num_key_value_heads * (_config.hidden_size / _config.num_attention_heads);
     for (LayerCache &cache : _cache) {
         cache.key.assign(capacity * kv_size, 0);
         cache.value.assign(capacity * kv_size, 0);

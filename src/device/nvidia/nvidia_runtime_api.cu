@@ -1,56 +1,103 @@
 #include "../runtime_api.hpp"
 
-#include <cstdlib>
-#include <cstring>
+#ifdef __C
+#undef __C
+#endif
+#include <cuda_runtime.h>
+
+#include <stdexcept>
+#include <string>
 
 namespace llaisys::device::nvidia {
 
 namespace runtime_api {
-int getDeviceCount() {
-    TO_BE_IMPLEMENTED();
+namespace {
+void check(cudaError_t status, const char *operation) {
+    if (status != cudaSuccess) {
+        throw std::runtime_error(
+            std::string(operation) + ": " + cudaGetErrorString(status));
+    }
 }
 
-void setDevice(int) {
-    TO_BE_IMPLEMENTED();
+cudaMemcpyKind convertMemcpyKind(llaisysMemcpyKind_t kind) {
+    switch (kind) {
+    case LLAISYS_MEMCPY_H2H:
+        return cudaMemcpyHostToHost;
+    case LLAISYS_MEMCPY_H2D:
+        return cudaMemcpyHostToDevice;
+    case LLAISYS_MEMCPY_D2H:
+        return cudaMemcpyDeviceToHost;
+    case LLAISYS_MEMCPY_D2D:
+        return cudaMemcpyDeviceToDevice;
+    default:
+        throw std::invalid_argument("Invalid CUDA memcpy kind");
+    }
+}
+} // namespace
+
+int getDeviceCount() {
+    int count = 0;
+    check(cudaGetDeviceCount(&count), "cudaGetDeviceCount");
+    return count;
+}
+
+void setDevice(int device) {
+    check(cudaSetDevice(device), "cudaSetDevice");
 }
 
 void deviceSynchronize() {
-    TO_BE_IMPLEMENTED();
+    check(cudaDeviceSynchronize(), "cudaDeviceSynchronize");
 }
 
 llaisysStream_t createStream() {
-    TO_BE_IMPLEMENTED();
+    cudaStream_t stream = nullptr;
+    check(cudaStreamCreate(&stream), "cudaStreamCreate");
+    return reinterpret_cast<llaisysStream_t>(stream);
 }
 
 void destroyStream(llaisysStream_t stream) {
-    TO_BE_IMPLEMENTED();
+    check(cudaStreamDestroy(reinterpret_cast<cudaStream_t>(stream)), "cudaStreamDestroy");
 }
 void streamSynchronize(llaisysStream_t stream) {
-    TO_BE_IMPLEMENTED();
+    check(cudaStreamSynchronize(reinterpret_cast<cudaStream_t>(stream)), "cudaStreamSynchronize");
 }
 
 void *mallocDevice(size_t size) {
-    TO_BE_IMPLEMENTED();
+    void *pointer = nullptr;
+    check(cudaMalloc(&pointer, size), "cudaMalloc");
+    return pointer;
 }
 
 void freeDevice(void *ptr) {
-    TO_BE_IMPLEMENTED();
+    check(cudaFree(ptr), "cudaFree");
 }
 
 void *mallocHost(size_t size) {
-    TO_BE_IMPLEMENTED();
+    void *pointer = nullptr;
+    check(cudaMallocHost(&pointer, size), "cudaMallocHost");
+    return pointer;
 }
 
 void freeHost(void *ptr) {
-    TO_BE_IMPLEMENTED();
+    check(cudaFreeHost(ptr), "cudaFreeHost");
 }
 
 void memcpySync(void *dst, const void *src, size_t size, llaisysMemcpyKind_t kind) {
-    TO_BE_IMPLEMENTED();
+    check(cudaMemcpy(dst, src, size, convertMemcpyKind(kind)), "cudaMemcpy");
 }
 
-void memcpyAsync(void *dst, const void *src, size_t size, llaisysMemcpyKind_t kind) {
-    TO_BE_IMPLEMENTED();
+void memcpyAsync(void *dst,
+                 const void *src,
+                 size_t size,
+                 llaisysMemcpyKind_t kind,
+                 llaisysStream_t stream) {
+    check(cudaMemcpyAsync(
+              dst,
+              src,
+              size,
+              convertMemcpyKind(kind),
+              reinterpret_cast<cudaStream_t>(stream)),
+          "cudaMemcpyAsync");
 }
 
 static const LlaisysRuntimeAPI RUNTIME_API = {
