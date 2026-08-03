@@ -4,9 +4,40 @@
 #undef __C
 #endif
 
+#ifdef LLAISYS_MUSA
+#include <musa_bf16.h>
+#include <musa_fp16.h>
+#include <musa_runtime.h>
+
+using cudaError_t = musaError_t;
+using cudaMemcpyKind = musaMemcpyKind;
+using cudaStream_t = musaStream_t;
+using __nv_bfloat16 = __mt_bfloat16;
+
+#define cudaSuccess musaSuccess
+#define cudaGetErrorString musaGetErrorString
+#define cudaGetLastError musaGetLastError
+#define cudaGetDeviceCount musaGetDeviceCount
+#define cudaSetDevice musaSetDevice
+#define cudaDeviceSynchronize musaDeviceSynchronize
+#define cudaStreamCreate musaStreamCreate
+#define cudaStreamDestroy musaStreamDestroy
+#define cudaStreamSynchronize musaStreamSynchronize
+#define cudaMalloc musaMalloc
+#define cudaFree musaFree
+#define cudaMallocHost musaMallocHost
+#define cudaFreeHost musaFreeHost
+#define cudaMemcpy musaMemcpy
+#define cudaMemcpyAsync musaMemcpyAsync
+#define cudaMemcpyHostToHost musaMemcpyHostToHost
+#define cudaMemcpyHostToDevice musaMemcpyHostToDevice
+#define cudaMemcpyDeviceToHost musaMemcpyDeviceToHost
+#define cudaMemcpyDeviceToDevice musaMemcpyDeviceToDevice
+#else
 #include <cuda_bf16.h>
 #include <cuda_fp16.h>
 #include <cuda_runtime.h>
+#endif
 
 #include <stdexcept>
 #include <string>

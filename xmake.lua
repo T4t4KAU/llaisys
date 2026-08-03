@@ -18,6 +18,18 @@ if has_config("nv-gpu") then
     includes("xmake/nvidia.lua")
 end
 
+-- MUSA --
+option("musa-gpu")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Whether to compile implementations for Moore Threads MUSA GPU")
+option_end()
+
+if has_config("musa-gpu") then
+    add_defines("ENABLE_MUSA_API")
+    includes("xmake/musa.lua")
+end
+
 target("llaisys-utils")
     set_kind("static")
 
@@ -141,6 +153,16 @@ target("llaisys")
         add_rules("cuda")
         add_values("cuda.rdc", false)
         add_links("cudart")
+    end
+    if has_config("musa-gpu") then
+        add_rules("musa.compile")
+        add_files("src/device/musa/*.mu")
+        add_files("src/ops/*/musa/*.mu")
+        add_files("src/models/*/*_musa.mu")
+        local musa_home = os.getenv("MUSA_HOME") or "/usr/local/musa"
+        add_linkdirs(path.join(musa_home, "lib"))
+        add_rpathdirs(path.join(musa_home, "lib"))
+        add_links("musart")
     end
     if not is_plat("windows") then
         add_ldflags("-fopenmp")

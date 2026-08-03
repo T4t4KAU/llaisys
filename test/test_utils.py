@@ -188,6 +188,10 @@ def torch_device(device_name: str, device_id=0):
         return torch.device("cpu")
     elif device_name == "nvidia":
         return torch.device(f"cuda:{device_id}")
+    elif device_name == "musa":
+        import torch_musa
+
+        return torch.device(f"musa:{device_id}")
     else:
         raise ValueError(f"Unsupported device name: {device_name}")
 
@@ -197,6 +201,8 @@ def llaisys_device(device_name: str):
         return llaisys.DeviceType.CPU
     elif device_name == "nvidia":
         return llaisys.DeviceType.NVIDIA
+    elif device_name == "musa":
+        return llaisys.DeviceType.MUSA
     else:
         raise ValueError(f"Unsupported device name: {device_name}")
 
@@ -206,6 +212,8 @@ def device_name(llaisys_device: llaisys.DeviceType):
         return "cpu"
     elif llaisys_device == llaisys.DeviceType.NVIDIA:
         return "nvidia"
+    elif llaisys_device == llaisys.DeviceType.MUSA:
+        return "musa"
     else:
         raise ValueError(f"Unsupported llaisys device: {llaisys_device}")
 

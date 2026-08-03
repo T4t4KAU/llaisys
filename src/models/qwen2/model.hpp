@@ -13,6 +13,9 @@ namespace llaisys::models {
 #ifdef ENABLE_NVIDIA_API
 class Qwen2NvidiaModel;
 #endif
+#ifdef ENABLE_MUSA_API
+class Qwen2MusaModel;
+#endif
 
 struct Weight {
     std::vector<uint16_t> data;
@@ -70,6 +73,9 @@ private:
     bool _ready = false;
 #ifdef ENABLE_NVIDIA_API
     std::unique_ptr<Qwen2NvidiaModel> _nvidia;
+#endif
+#ifdef ENABLE_MUSA_API
+    std::unique_ptr<Qwen2MusaModel> _musa;
 #endif
 
     std::vector<uint16_t> _hidden;

@@ -348,6 +348,15 @@ xmake install
 python test/test_runtime.py --device nvidia
 ```
 
+For Moore Threads GPUs, install the MUSA toolkit and enable the MUSA backend instead. `MUSA_HOME` defaults to `/usr/local/musa` and can be overridden when the toolkit is installed elsewhere.
+
+```bash
+xmake f --nv-gpu=n --musa-gpu=y -cv
+xmake
+xmake install
+python test/test_runtime.py --device musa
+```
+
 ### Implement CUDA Operators
 Create a `nvdia/` sub-directory in each operator source directory and implement a cuda version. Check `src/ops/add/op.cpp` to see how to include your cuda implementations. Remeber to define the compiling procedures in the xmake files. Run the operator tests with `--device nvidia` flag to test your CUDA implementation.
 

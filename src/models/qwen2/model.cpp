@@ -2,6 +2,9 @@
 #ifdef ENABLE_NVIDIA_API
 #include "model_nvidia.cuh"
 #endif
+#ifdef ENABLE_MUSA_API
+#include "model_musa.muh"
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -176,8 +179,11 @@ Qwen2Model::Qwen2Model(const LlaisysQwen2Config &config)
 #ifdef ENABLE_NVIDIA_API
         && _config.device_type != LLAISYS_DEVICE_NVIDIA
 #endif
+#ifdef ENABLE_MUSA_API
+        && _config.device_type != LLAISYS_DEVICE_MUSA
+#endif
     ) {
-        throw std::invalid_argument("Qwen2 CPU model only supports the CPU device in this build");
+        throw std::invalid_argument("Unsupported Qwen2 device in this build");
     }
     if (_config.hidden_size == 0 || _config.num_attention_heads == 0 || _config.hidden_size % _config.num_attention_heads != 0 || _config.num_attention_heads % _config.num_key_value_heads != 0) {
         throw std::invalid_argument("Invalid Qwen2 configuration");
@@ -186,6 +192,12 @@ Qwen2Model::Qwen2Model(const LlaisysQwen2Config &config)
 #ifdef ENABLE_NVIDIA_API
     if (_config.device_type == LLAISYS_DEVICE_NVIDIA) {
         _nvidia = std::make_unique<Qwen2NvidiaModel>(_config);
+        return;
+    }
+#endif
+#ifdef ENABLE_MUSA_API
+    if (_config.device_type == LLAISYS_DEVICE_MUSA) {
+        _musa = std::make_unique<Qwen2MusaModel>(_config);
         return;
     }
 #endif
@@ -289,6 +301,11 @@ bool Qwen2Model::loadWeight(const std::string &name,
         return _nvidia->loadWeight(name, data, shape, ndim, dtype);
     }
 #endif
+#ifdef ENABLE_MUSA_API
+    if (_musa) {
+        return _musa->loadWeight(name, data, shape, ndim, dtype);
+    }
+#endif
     Weight *weight = findWeight(name);
     if (weight == nullptr) {
         return false;
@@ -307,6 +324,12 @@ bool Qwen2Model::finalize() {
 #ifdef ENABLE_NVIDIA_API
     if (_nvidia) {
         _ready = _nvidia->finalize();
+        return _ready;
+    }
+#endif
+#ifdef ENABLE_MUSA_API
+    if (_musa) {
+        _ready = _musa->finalize();
         return _ready;
     }
 #endif
@@ -429,6 +452,12 @@ size_t Qwen2Model::generate(const int64_t *input_ids,
 #ifdef ENABLE_NVIDIA_API
     if (_nvidia) {
         return _nvidia->generate(
+            input_ids, input_count, max_new_tokens, output_ids, output_capacity);
+    }
+#endif
+#ifdef ENABLE_MUSA_API
+    if (_musa) {
+        return _musa->generate(
             input_ids, input_count, max_new_tokens, output_ids, output_capacity);
     }
 #endif

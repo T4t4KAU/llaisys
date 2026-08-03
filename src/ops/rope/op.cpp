@@ -7,6 +7,9 @@
 #ifdef ENABLE_NVIDIA_API
 #include "nvidia/rope_nvidia.cuh"
 #endif
+#ifdef ENABLE_MUSA_API
+#include "../musa/ops_musa.hpp"
+#endif
 
 namespace llaisys::ops {
 void rope(tensor_t out, tensor_t in, tensor_t pos_ids, float theta) {
@@ -33,6 +36,10 @@ void rope(tensor_t out, tensor_t in, tensor_t pos_ids, float theta) {
         return nvidia::rope(
             out->data(), in->data(), pos_ids->data(), theta, out->dtype(),
             out->shape()[0], out->shape()[1], out->shape()[2]);
+#endif
+#ifdef ENABLE_MUSA_API
+    case LLAISYS_DEVICE_MUSA:
+        return musa::rope(out->data(), in->data(), pos_ids->data(), theta, out->dtype(), out->shape()[0], out->shape()[1], out->shape()[2]);
 #endif
     default:
         EXCEPTION_UNSUPPORTED_DEVICE;

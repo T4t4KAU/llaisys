@@ -347,6 +347,15 @@ xmake install
 python test/test_runtime.py --device nvidia
 ```
 
+对于摩尔线程 GPU，请先安装 MUSA 工具链，再启用 MUSA 后端进行编译。`MUSA_HOME` 默认值为 `/usr/local/musa`，工具链安装在其他位置时可通过该环境变量覆盖。
+
+```bash
+xmake f --nv-gpu=n --musa-gpu=y -cv
+xmake
+xmake install
+python test/test_runtime.py --device musa
+```
+
 ### 实现 CUDA 算子
 
 在每个算子目录下新建 ``nvidia/`` 子目录，写 CUDA 版本实现。参考 ``src/ops/add/op.cpp`` 看如何包含 CUDA 实现。别忘了在 xmake 文件中定义编译流程。用 ``--device nvidia`` 参数运行测试。

@@ -1,0 +1,22 @@
+#pragma once
+
+#include "llaisys/models/qwen2.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+
+namespace llaisys::models {
+class Qwen2MusaModel {
+public:
+    explicit Qwen2MusaModel(const LlaisysQwen2Config &config);
+    ~Qwen2MusaModel();
+    bool loadWeight(const std::string &, const void *, const size_t *, size_t, llaisysDataType_t);
+    bool finalize();
+    size_t generate(const int64_t *, size_t, size_t, int64_t *, size_t);
+
+private:
+    struct Impl;
+    Impl *_impl;
+};
+} // namespace llaisys::models

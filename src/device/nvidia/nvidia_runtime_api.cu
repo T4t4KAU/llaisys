@@ -1,9 +1,6 @@
 #include "../runtime_api.hpp"
 
-#ifdef __C
-#undef __C
-#endif
-#include <cuda_runtime.h>
+#include "cuda_utils.cuh"
 
 #include <stdexcept>
 #include <string>
